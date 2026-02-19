@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useRestaurantStore } from '@/store/restaurant-store';
+import { useRestaurantStore, computeTablesWithStatus } from '@/store/restaurant-store';
 import { TableComponent } from './TableComponent';
 import { TableWithStatus } from '@/types/restaurant';
 
@@ -8,28 +8,30 @@ interface AreaCanvasProps {
 }
 
 export function AreaCanvas({ onTableClick }: AreaCanvasProps) {
-  const { selectedAreaId, areas, getAreaTables } = useRestaurantStore();
+  const selectedAreaId = useRestaurantStore((s) => s.selectedAreaId);
+  const areas = useRestaurantStore((s) => s.areas);
+  const rawTables = useRestaurantStore((s) => s.tables);
+  const reservations = useRestaurantStore((s) => s.reservations);
 
   const area = areas.find((a) => a.id === selectedAreaId);
+
   const tables = useMemo(() => {
     if (!selectedAreaId) return [];
-    return getAreaTables(selectedAreaId);
-  }, [selectedAreaId, getAreaTables]);
+    const areaTables = rawTables.filter((t) => t.areaId === selectedAreaId);
+    return computeTablesWithStatus(areaTables, reservations, new Date());
+  }, [selectedAreaId, rawTables, reservations]);
 
-  // Check VIP merged state
   const vipMergedReservation = useMemo(() => {
     if (area?.name !== 'VIP') return null;
     const tableA = tables.find((t) => t.mergeGroup === 'VIP_AB' && t.name === 'Cuadrada A');
     const tableB = tables.find((t) => t.mergeGroup === 'VIP_AB' && t.name === 'Cuadrada B');
     if (!tableA || !tableB) return null;
-
-    // Check if there's an active combined reservation
     if (
       tableA.reservation &&
       tableB.reservation &&
       tableA.reservation.id === tableB.reservation.id
     ) {
-      return tableA; // Return either, they share the same reservation
+      return tableA;
     }
     return null;
   }, [tables, area]);
@@ -49,25 +51,18 @@ export function AreaCanvas({ onTableClick }: AreaCanvasProps) {
 
     return (
       <div className="flex flex-col items-center gap-8 p-8">
-        {/* Round table on top */}
         {roundTable && (
           <div className="flex flex-col items-center gap-2">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Mesa Redonda</span>
             <TableComponent table={roundTable} onClick={onTableClick} />
           </div>
         )}
-
-        {/* Square tables - merged or separate */}
         <div className="flex flex-col items-center gap-2">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
             {vipMergedReservation ? 'A + B Combinadas' : 'Mesas Cuadradas'}
           </span>
           {vipMergedReservation ? (
-            <TableComponent
-              table={vipMergedReservation}
-              onClick={onTableClick}
-              isMergedView
-            />
+            <TableComponent table={vipMergedReservation} onClick={onTableClick} isMergedView />
           ) : (
             <div className="flex gap-3">
               {squareA && <TableComponent table={squareA} onClick={onTableClick} />}
@@ -80,13 +75,11 @@ export function AreaCanvas({ onTableClick }: AreaCanvasProps) {
   };
 
   const renderStandardLayout = () => {
-    // Group by capacity for visual rows
     const byCapacity: Record<number, TableWithStatus[]> = {};
     tables.forEach((t) => {
       if (!byCapacity[t.capacity]) byCapacity[t.capacity] = [];
       byCapacity[t.capacity].push(t);
     });
-
     const capacities = Object.keys(byCapacity).map(Number).sort((a, b) => a - b);
 
     return (
