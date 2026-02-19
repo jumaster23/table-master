@@ -57,7 +57,7 @@ export const TableComponent = memo(function TableComponent({ table, onClick, isM
       title={`${table.name} (${table.capacity}p) - ${table.visualStatus}`}
     >
       <span className="text-[10px] font-bold leading-none opacity-90">{table.name}</span>
-      <span className="text-[9px] leading-none opacity-60">{isMergedView ? 'A+B 8p' : `${table.capacity}p`}</span>
+      <span className="text-[9px] leading-none opacity-60">{isMergedView ? 'A+B 6p' : `${table.capacity}p`}</span>
 
       {showTimer && table.reservation && (
         <CountdownTimer

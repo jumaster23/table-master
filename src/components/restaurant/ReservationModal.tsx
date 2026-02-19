@@ -12,6 +12,12 @@ interface ReservationModalProps {
   table: TableWithStatus;
 }
 
+const DURATION_OPTIONS = [
+  { value: 90, label: '90 min (estándar)' },
+  { value: 120, label: '120 min (VIP/evento)' },
+  { value: 180, label: '180 min (VIP/evento)' },
+];
+
 export function ReservationModal({ open, onClose, table }: ReservationModalProps) {
   const { createReservation } = useRestaurantStore();
 
@@ -40,10 +46,8 @@ export function ReservationModal({ open, onClose, table }: ReservationModalProps
     const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
     const today = now.toISOString().split('T')[0];
 
-    // For VIP merged tables, include both A and B
     let tableIds = [table.id];
     if (table.canMerge && table.mergeGroup === 'VIP_AB') {
-      // Check if we should merge - this is simplified; in real app, ask user
       tableIds = [table.id];
     }
 
@@ -88,16 +92,25 @@ export function ReservationModal({ open, onClose, table }: ReservationModalProps
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Duración (min)</Label>
-              <Input
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                min={30}
-                max={300}
-                step={15}
-                className="bg-secondary border-border"
-              />
+              <Label className="text-xs text-muted-foreground">Duración</Label>
+              <div className="flex gap-1">
+                {DURATION_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={duration === opt.value ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setDuration(opt.value)}
+                    className={`text-[10px] px-2 h-8 ${
+                      duration === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {opt.value}m
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
 

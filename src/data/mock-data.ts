@@ -5,7 +5,7 @@ export const mockAreas: Area[] = [
   { id: 'area-patio', name: 'Patio', maxTables: 8 },
   { id: 'area-lobby', name: 'Lobby', maxTables: 8 },
   { id: 'area-bar', name: 'Bar', maxTables: 8 },
-  { id: 'area-vip', name: 'VIP', maxTables: 3 },
+  { id: 'area-vip', name: 'Salones VIP', maxTables: 3 },
 ];
 
 export const mockTables: RestaurantTable[] = [
@@ -81,7 +81,7 @@ export const mockReservations: Reservation[] = [
     id: 'res-3',
     tableIds: ['t-va', 't-vb'],
     clientName: 'Fernández VIP',
-    partySize: 6,
+    partySize: 5,
     date: today,
     startTime: '20:00',
     endTime: '22:00',

@@ -98,6 +98,15 @@ export const api = {
       if (units >= 2) {
         throw { status: 409, message: 'Máximo 2 unidades funcionales VIP simultáneas.' };
       }
+
+      // Validate A+B combined capacity (max 6 people)
+      const mergedTableIds = data.tableIds.filter((id) => {
+        const t = mockTables.find((mt) => mt.id === id);
+        return t?.canMerge && t?.mergeGroup === 'VIP_AB';
+      });
+      if (mergedTableIds.length === 2 && data.partySize > 6) {
+        throw { status: 422, message: 'Las mesas A+B combinadas soportan máximo 6 personas.' };
+      }
     }
 
     const reservation: Reservation = { ...data, id: generateId() };

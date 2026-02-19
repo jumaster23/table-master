@@ -8,7 +8,7 @@ const areaIcons: Record<string, React.ElementType> = {
   Patio: MapPin,
   Lobby: Building2,
   Bar: Wine,
-  VIP: Armchair,
+  'Salones VIP': Armchair,
 };
 
 export function AreaSidebar() {
