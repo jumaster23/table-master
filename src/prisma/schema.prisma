@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  maxTables   Int      @default(8)
+  isVip       Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tables Table[]
+
+  @@map("areas")
+}
+
+model Table {
+  id           String    @id @default(cuid())
+  number       String
+  capacity     Int
+  tableType    TableType @default(STANDARD)
+  isVipSpecial Boolean   @default(false)
+  vipPairKey   String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  areaId String
+  area   Area   @relation(fields: [areaId], references: [id])
+
+  reservationTables ReservationTable[]
+
+  @@unique([areaId, number])
+  @@index([areaId])
+  @@index([capacity])
+  @@map("tables")
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  guestName    String
+  guestPhone   String?
+  guestEmail   String?
+  partySize    Int
+  date         DateTime          @db.Date
+  startTime    String
+  endTime      String
+  durationMins Int               @default(90)
+  status       ReservationStatus @default(PENDING)
+  isVip        Boolean           @default(false)
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  reservationTables ReservationTable[]
+
+  @@index([date])
+  @@index([status])
+  @@index([date, status])
+  @@map("reservations")
+}
+
+model ReservationTable {
+  id            String  @id @default(cuid())
+  reservationId String
+  tableId       String
+  isCombined    Boolean @default(false)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  table       Table       @relation(fields: [tableId], references: [id])
+
+  @@unique([reservationId, tableId])
+  @@index([tableId])
+  @@map("reservation_tables")
+}
+
+enum TableType {
+  STANDARD
+  CIRCULAR
+  VIP_SQUARE
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}

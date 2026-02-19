@@ -14,6 +14,8 @@ export interface RestaurantTable {
   capacity: number;
   type: TableType;
   name: string;
+  x: number;
+  y: number;
   isVIP: boolean;
   canMerge: boolean;
   mergeGroup: string | null;

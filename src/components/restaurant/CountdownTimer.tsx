@@ -13,7 +13,8 @@ export function CountdownTimer({ startTime, duration, date }: CountdownTimerProp
   useEffect(() => {
     const update = () => {
       const [h, m] = startTime.split(':').map(Number);
-      const startDate = new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+      const [year, month, day] = date.split('-').map(Number);
+      const startDate = new Date(year, month - 1, day, h, m, 0);
       const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
       const now = new Date();
 
@@ -50,7 +51,7 @@ export function CountdownTimer({ startTime, duration, date }: CountdownTimerProp
 
   return (
     <span
-      className={`font-mono text-[10px] font-bold leading-none ${
+      className={`font-mono text-[1.25rem] font-bold leading-none ${
         exceeded ? 'text-red-400 table-time-exceeded' : ''
       }`}
     >

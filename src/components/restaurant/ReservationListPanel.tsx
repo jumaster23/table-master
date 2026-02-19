@@ -5,6 +5,7 @@ import { useRestaurantStore } from '@/store/restaurant-store';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Check, X, UserX } from 'lucide-react';
+import { getLocalDateISO } from '@/lib/date';
 
 interface ReservationListPanelProps {
   open: boolean;
@@ -23,9 +24,9 @@ export function ReservationListPanel({ open, onClose }: ReservationListPanelProp
   const { reservations, tables, updateReservationStatus } = useRestaurantStore();
 
   const todayReservations = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateISO();
     return reservations
-      .filter((r) => r.date === today && r.duration > 0) // exclude walk-ins
+      .filter((r) => r.date === today)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [reservations]);
 

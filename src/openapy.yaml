@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: Restaurant Reservation API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api
+
+paths:
+  /areas:
+    get:
+      summary: Get all areas
+      responses:
+        '200':
+          description: List of areas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Area'
+
+  /tables:
+    get:
+      summary: Get tables
+      parameters:
+        - in: query
+          name: areaId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tables
+
+  /reservations:
+    get:
+      summary: Get reservations by date
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of reservations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Invalid date
+    post:
+      summary: Create reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+      responses:
+        '200':
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Reservation'
+        '400':
+          description: Invalid payload
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  /ready:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Ready
+        '503':
+          description: Not ready
+
+components:
+  schemas:
+    Area:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        maxTables:
+          type: integer
+    Reservation:
+      type: object
+      properties:
+        id:
+          type: string
+        guest_name:
+          type: string
+        party_size:
+          type: integer
+        date:
+          type: string
+          format: date
+        start_time:
+          type: string
+        end_time:
+          type: string
+        duration_mins:
+          type: integer
+        status:
+          type: string
+        notes:
+          type: string
+    ReservationCreate:
+      type: object
+      required:
+        - guestName
+        - partySize
+        - date
+        - startTime
+        - durationMins
+        - tableIds
+      properties:
+        guestName:
+          type: string
+        partySize:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        endTime:
+          type: string
+        durationMins:
+          type: integer
+        tableIds:
+          type: array
+          items:
+            type: string
+        tableId:
+          type: string
+        isVip:
+          type: boolean
+        status:
+          type: string
+        notes:
+          type: string

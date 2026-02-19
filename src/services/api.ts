@@ -1,124 +1,247 @@
-/**
- * API Service Layer
- * Currently uses mock data. Replace implementations with real API calls.
- * Set API_BASE_URL when connecting to external REST API.
- */
-
 import { Area, RestaurantTable, Reservation, ReservationStatus, AvailabilityResponse } from '@/types/restaurant';
-import { mockAreas, mockTables, mockReservations } from '@/data/mock-data';
 
-const API_BASE_URL = ''; // Set this when connecting to real API
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api';
 
-// In-memory store for mock mode
-let reservations = [...mockReservations];
-let nextId = 100;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function generateId(): string {
-  return `res-${nextId++}`;
+function asRecord(value: unknown): Record<string, unknown> {
+  return (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
 }
 
-// Check overlap for a set of tableIds in a time range
-function hasOverlap(
-  tableIds: string[],
-  date: string,
-  startTime: string,
-  endTime: string,
-  excludeId?: string
-): boolean {
-  return reservations.some((r) => {
-    if (r.id === excludeId) return false;
-    if (r.date !== date) return false;
-    if (r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show') return false;
-    const hasCommonTable = r.tableIds.some((id) => tableIds.includes(id));
-    if (!hasCommonTable) return false;
-    // Overlap check
-    return r.startTime < endTime && r.endTime > startTime;
-  });
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
 }
+
+function fallbackPosition(seed: string): { x: number; y: number } {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  const x = 10 + (hash % 70);
+  const y = 12 + ((Math.floor(hash / 97) % 65));
+  return { x, y };
+}
+
+function normalizeStatus(value: unknown): ReservationStatus {
+  const raw = String(value ?? '').toLowerCase();
+  const mapped: Record<string, ReservationStatus> = {
+    pending: 'pending',
+    confirmed: 'confirmed',
+    cancelled: 'cancelled',
+    completed: 'completed',
+    'no_show': 'no_show',
+    'no-show': 'no_show',
+    noshow: 'no_show',
+  };
+  return mapped[raw] ?? 'confirmed';
+}
+
+function normalizeDate(value: unknown): string {
+  const date = String(value ?? '');
+  if (!date) return new Date().toISOString().split('T')[0];
+  return date.includes('T') ? date.split('T')[0] : date;
+}
+
+function normalizeTime(value: unknown): string {
+  const raw = String(value ?? '00:00');
+  const [h = '00', m = '00'] = raw.split(':');
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+}
+
+function computeEndTime(startTime: string, durationMins: number): string {
+  const [h, m] = startTime.split(':').map(Number);
+  const baseMins = (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+  const total = baseMins + Math.max(0, durationMins);
+  const endH = Math.floor((total % 1440) / 60);
+  const endM = total % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+function extractTableIds(r: Record<string, unknown>): string[] {
+  const reservationTables = Array.isArray(r.reservationTables)
+    ? (r.reservationTables as unknown[])
+    : [];
+
+  if (reservationTables.length > 0) {
+    return reservationTables
+      .map((entry) => asRecord(asRecord(entry).table).id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  }
+
+  if (Array.isArray(r.tableIds)) {
+    return (r.tableIds as unknown[])
+      .map((id) => String(id))
+      .filter((id) => id.length > 0);
+  }
+
+  if (Array.isArray(r.table_ids)) {
+    return (r.table_ids as unknown[])
+      .map((id) => String(id))
+      .filter((id) => id.length > 0);
+  }
+
+  if (typeof r.tableId === 'string' && r.tableId.length > 0) {
+    return [r.tableId];
+  }
+
+  if (typeof r.table_id === 'string' && r.table_id.length > 0) {
+    return [r.table_id];
+  }
+
+  return [];
+}
+
+function toReservation(r: Record<string, unknown>): Reservation {
+  const startTime = normalizeTime(r.startTime ?? r.start_time ?? '00:00');
+  const duration = toNumber(r.durationMins ?? r.duration_mins ?? r.duration ?? 90, 90);
+  const endTimeRaw = r.endTime ?? r.end_time;
+  const endTime = typeof endTimeRaw === 'string' && endTimeRaw.length > 0
+    ? normalizeTime(endTimeRaw)
+    : computeEndTime(startTime, duration);
+
+  return {
+    id: String(r.id ?? ''),
+    tableIds: extractTableIds(r),
+    clientName: String(r.guestName ?? r.guest_name ?? r.clientName ?? 'Cliente'),
+    partySize: toNumber(r.partySize ?? r.party_size ?? 1, 1),
+    date: normalizeDate(r.date),
+    startTime,
+    endTime,
+    status: normalizeStatus(r.status),
+    duration,
+    notes: String(r.notes ?? ''),
+  };
+}
+
+function toTable(t: Record<string, unknown>): RestaurantTable {
+  const area = asRecord(t.area);
+  const tableType = String(t.tableType ?? t.table_type ?? t.type ?? 'standard');
+  const vipPairKey = t.vipPairKey ?? t.vip_pair_key;
+  const id = String(t.id ?? '');
+  const areaId = String(area.id ?? t.areaId ?? t.area_id ?? t.area ?? '');
+  const name = String(t.number ?? t.name ?? `Mesa ${id}`);
+  const fallback = fallbackPosition(`${areaId}-${id}-${name}`);
+
+  return {
+    id,
+    areaId,
+    capacity: toNumber(t.capacity, 1),
+    type: tableType === 'CIRCULAR' ? 'circular' : tableType === 'VIP_SQUARE' ? 'square' : 'standard',
+    name,
+    x: toNumber(t.x, fallback.x),
+    y: toNumber(t.y, fallback.y),
+    isVIP: Boolean(area.isVip ?? area.is_vip ?? t.isVip ?? t.is_vip),
+    canMerge: typeof vipPairKey === 'string' ? vipPairKey.length > 0 : Boolean(t.canMerge),
+    mergeGroup: typeof vipPairKey === 'string' && vipPairKey.length > 0 ? vipPairKey : (t.mergeGroup as string | null) ?? null,
+  };
+}
+
+function toArea(a: Record<string, unknown>): Area {
+  const nameMap: Record<string, string> = {
+    terraza: 'Terraza',
+    patio: 'Patio',
+    lobby: 'Lobby',
+    bar: 'Bar',
+    vip: 'Salones VIP',
+    terrace: 'Terraza',
+    vip_area: 'Salones VIP',
+  };
+
+  const areaName = String(a.name ?? nameMap[String(a.slug ?? '').toLowerCase()] ?? 'Terraza') as Area['name'];
+
+  return {
+    id: String(a.id ?? ''),
+    name: areaName,
+    maxTables: toNumber(a.maxTables ?? a.max_tables, 1),
+  };
+}
+
+// ─── API ─────────────────────────────────────────────────────────────────────
 
 export const api = {
   async getAreas(): Promise<Area[]> {
-    return [...mockAreas];
+    const res = await fetch(`${API_BASE_URL}/areas`);
+    if (!res.ok) throw new Error('Error al obtener áreas');
+    const json = await res.json();
+    return (json.data as Record<string, unknown>[]).map(toArea);
   },
 
   async getTables(areaId?: string): Promise<RestaurantTable[]> {
-    if (areaId) return mockTables.filter((t) => t.areaId === areaId);
-    return [...mockTables];
+    const url = areaId
+      ? `${API_BASE_URL}/tables?areaId=${areaId}`
+      : `${API_BASE_URL}/tables`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Error al obtener mesas');
+    const json = await res.json();
+    return (json.data as Record<string, unknown>[]).map(toTable);
   },
 
   async getReservations(date: string, areaId?: string): Promise<Reservation[]> {
-    let filtered = reservations.filter((r) => r.date === date);
-    if (areaId) {
-      const areaTables = mockTables.filter((t) => t.areaId === areaId).map((t) => t.id);
-      filtered = filtered.filter((r) => r.tableIds.some((id) => areaTables.includes(id)));
-    }
-    return filtered;
+    const params = new URLSearchParams({ date });
+    if (areaId) params.append('areaId', areaId);
+    const res = await fetch(`${API_BASE_URL}/reservations?${params}`);
+    if (!res.ok) throw new Error('Error al obtener reservas');
+    const json = await res.json();
+    return (json.data as Record<string, unknown>[]).map(toReservation);
   },
 
   async createReservation(data: Omit<Reservation, 'id'>): Promise<Reservation> {
-    // Validate no past
-    const now = new Date();
-    const resDate = new Date(`${data.date}T${data.startTime}`);
-    if (resDate < now && data.duration > 0) {
-      throw { status: 422, message: 'No se permiten reservas en el pasado.' };
-    }
+    const body = {
+      guestName: data.clientName,
+      partySize: data.partySize,
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      durationMins: data.duration === 0 ? 90 : data.duration,
+      tableIds: data.tableIds,
+      tableId: data.tableIds[0],
+      isVip: data.tableIds.length > 1,
+      status: 'CONFIRMED',
+      notes: data.notes,
+    };
 
-    // Validate overlap
-    if (hasOverlap(data.tableIds, data.date, data.startTime, data.endTime)) {
-      throw { status: 409, message: 'La mesa ya está reservada en ese horario.' };
-    }
-
-    // VIP functional unit check
-    const vipTableIds = data.tableIds.filter((id) => {
-      const t = mockTables.find((mt) => mt.id === id);
-      return t?.isVIP;
+    const res = await fetch(`${API_BASE_URL}/reservations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
 
-    if (vipTableIds.length > 0) {
-      const activeVipRes = reservations.filter((r) => {
-        if (r.date !== data.date) return false;
-        if (r.status === 'cancelled' || r.status === 'completed' || r.status === 'no_show') return false;
-        if (!(r.startTime < data.endTime && r.endTime > data.startTime)) return false;
-        return r.tableIds.some((id) => {
-          const t = mockTables.find((mt) => mt.id === id);
-          return t?.isVIP;
-        });
-      });
+    const json = await res.json();
 
-      // Count functional units
-      let units = 0;
-      const counted = new Set<string>();
-      for (const r of activeVipRes) {
-        const key = r.tableIds.sort().join(',');
-        if (!counted.has(key)) {
-          counted.add(key);
-          units++;
-        }
-      }
-      if (units >= 2) {
-        throw { status: 409, message: 'Máximo 2 unidades funcionales VIP simultáneas.' };
-      }
-
-      // Validate A+B combined capacity (max 6 people)
-      const mergedTableIds = data.tableIds.filter((id) => {
-        const t = mockTables.find((mt) => mt.id === id);
-        return t?.canMerge && t?.mergeGroup === 'VIP_AB';
-      });
-      if (mergedTableIds.length === 2 && data.partySize > 6) {
-        throw { status: 422, message: 'Las mesas A+B combinadas soportan máximo 6 personas.' };
-      }
+    if (!res.ok) {
+      throw { status: res.status, message: json.error ?? 'Error al crear reserva' };
     }
 
-    const reservation: Reservation = { ...data, id: generateId() };
-    reservations.push(reservation);
-    return reservation;
+    return toReservation(json.data as Record<string, unknown>);
   },
 
   async updateReservationStatus(id: string, status: ReservationStatus): Promise<Reservation> {
-    const idx = reservations.findIndex((r) => r.id === id);
-    if (idx === -1) throw { status: 404, message: 'Reserva no encontrada.' };
-    reservations[idx] = { ...reservations[idx], status };
-    return reservations[idx];
+    const statusMap: Record<string, string> = {
+      pending: 'PENDING',
+      confirmed: 'CONFIRMED',
+      cancelled: 'CANCELLED',
+      completed: 'COMPLETED',
+      no_show: 'NO_SHOW',
+    };
+
+    const res = await fetch(`${API_BASE_URL}/reservations/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: statusMap[status] }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      throw { status: res.status, message: json.error ?? 'Error al actualizar reserva' };
+    }
+
+    return toReservation(json.data as Record<string, unknown>);
   },
 
   async getAvailability(
@@ -127,39 +250,52 @@ export const api = {
     startTime: string,
     areaPreference?: string
   ): Promise<AvailabilityResponse> {
-    const duration = 90;
-    const [h, m] = startTime.split(':').map(Number);
-    const endMinutes = h * 60 + m + duration;
-    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+    const areaSlugMap: Record<string, string> = {
+      'area-terraza': 'TERRACE',
+      'area-patio': 'PATIO',
+      'area-lobby': 'LOBBY',
+      'area-bar': 'BAR',
+      'area-vip': 'VIP',
+    };
 
-    let tables = [...mockTables];
-    if (areaPreference) {
-      tables = tables.filter((t) => t.areaId === areaPreference);
+    const params = new URLSearchParams({
+      date,
+      partySize: String(partySize),
+      startTime,
+      areaPreference: areaPreference ? (areaSlugMap[areaPreference] ?? 'ANY') : 'ANY',
+    });
+
+    const res = await fetch(`${API_BASE_URL}/availability?${params}`);
+    const json = await res.json();
+
+    if (!res.ok) {
+      throw { status: res.status, message: json.error ?? 'Error al consultar disponibilidad' };
     }
 
-    const available = tables
-      .filter((t) => t.capacity >= partySize)
-      .filter((t) => !hasOverlap([t.id], date, startTime, endTime))
-      .sort((a, b) => a.capacity - b.capacity);
+    interface ApiOption {
+      tableIds: string[];
+      totalCapacity: number;
+      tableNumbers: string[];
+    }
 
-    const suggested = available.slice(0, 3).map((t) => ({
-      tableIds: [t.id],
-      capacity: t.capacity,
-      tableName: t.name,
+    const options = (json.options as ApiOption[]) ?? [];
+
+    const suggested = options.slice(0, 3).map((o) => ({
+      tableIds: o.tableIds,
+      capacity: o.totalCapacity,
+      tableName: o.tableNumbers.join(' + '),
     }));
 
-    const alternatives = available.slice(3, 6).map((t) => ({
-      tableIds: [t.id],
-      capacity: t.capacity,
-      tableName: t.name,
+    const alternatives = options.slice(3, 6).map((o) => ({
+      tableIds: o.tableIds,
+      capacity: o.totalCapacity,
+      tableName: o.tableNumbers.join(' + '),
     }));
 
     return { suggestedTables: suggested, alternatives };
   },
 
-  // Reset mock data (for testing)
-  resetMockData() {
-    reservations = [...mockReservations];
-    nextId = 100;
+  resetMockData(): void {
+    console.warn('resetMockData no aplica cuando se usa la API real.');
   },
 };

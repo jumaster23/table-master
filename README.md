@@ -36,6 +36,12 @@ npm i
 npm run dev
 ```
 
+Para ejecutar frontend + API al mismo tiempo, usa:
+
+```sh
+npm run dev:full
+```
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
@@ -59,6 +65,79 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+
+## Local full-stack run (frontend + API)
+
+1. Install dependencies in both projects:
+
+```sh
+npm i
+cd api && npm i
+```
+
+2. Configure environment variables:
+
+- Root `.env`:
+
+```env
+VITE_API_BASE_URL=/api
+VITE_API_PROXY_TARGET=http://localhost:3000
+VITE_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<tu-anon-key>
+```
+
+- `api/.env`:
+
+```env
+SUPABASE_URL=https://<tu-proyecto>.supabase.co
+SUPABASE_SERVICE_KEY=<tu-service-role-key>
+PORT=3000
+```
+
+3. Start API and frontend in separate terminals:
+
+```sh
+cd api && npm start
+```
+
+```sh
+npm run dev
+```
+
+API docs (Swagger UI): http://localhost:3000/docs
+
+## Production checklist
+
+1. Backend env (`api/.env`) must use service role key:
+
+```env
+NODE_ENV=production
+PORT=3000
+SUPABASE_URL=https://<tu-proyecto>.supabase.co
+SUPABASE_SERVICE_KEY=<tu-service-role-key>
+CORS_ORIGINS=https://tu-frontend.com
+ALLOW_ANON_KEY_IN_DEV=false
+```
+
+2. Frontend env (`.env`) for production build:
+
+```env
+VITE_API_BASE_URL=https://tu-api.com/api
+VITE_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<tu-anon-key>
+```
+
+3. Verify backend readiness before exposing traffic:
+
+```sh
+curl https://tu-api.com/api/ready
+```
+
+4. Start backend with:
+
+```sh
+cd api && npm run start:prod
+```
 
 ## How can I deploy this project?
 

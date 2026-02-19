@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { Area, RestaurantTable, Reservation, TableWithStatus, TableVisualStatus } from '@/types/restaurant';
 import { api } from '@/services/api';
+import { mockAreas, mockReservations, mockTables } from '@/data/mock-data';
+import { getLocalDateISO } from '@/lib/date';
 
 interface RestaurantState {
   areas: Area[];
@@ -17,6 +19,12 @@ interface RestaurantState {
   updateReservationStatus: (id: string, status: Reservation['status']) => Promise<void>;
   markWalkIn: (tableId: string) => Promise<void>;
   releaseTable: (tableId: string) => Promise<void>;
+  updateTablePosition: (
+    tableId: string,
+    x: number,
+    y: number,
+    _meta?: { canvasWidth?: number; canvasHeight?: number; isMergedView?: boolean }
+  ) => void;
 }
 
 export function computeVisualStatus(
@@ -24,7 +32,7 @@ export function computeVisualStatus(
   reservations: Reservation[],
   now: Date
 ): { status: TableVisualStatus; reservation?: Reservation } {
-  const today = now.toISOString().split('T')[0];
+  const today = getLocalDateISO(now);
   const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const activeReservations = reservations.filter((r) => {
@@ -71,18 +79,40 @@ export const useRestaurantStore = create<RestaurantState>((set, get) => ({
 
   loadInitialData: async () => {
     set({ loading: true });
-    const [areas, tables, reservations] = await Promise.all([
-      api.getAreas(),
-      api.getTables(),
-      api.getReservations(new Date().toISOString().split('T')[0]),
-    ]);
-    set({ areas, tables, reservations, selectedAreaId: areas[0]?.id ?? null, loading: false });
+    try {
+      const [areas, tables, reservations] = await Promise.all([
+        api.getAreas(),
+        api.getTables(),
+        api.getReservations(getLocalDateISO()),
+      ]);
+
+      const hasCoreData = areas.length > 0 && tables.length > 0;
+      const nextAreas = hasCoreData ? areas : mockAreas;
+      const nextTables = hasCoreData ? tables : mockTables;
+      const nextReservations = hasCoreData ? reservations : mockReservations;
+
+      set({
+        areas: nextAreas,
+        tables: nextTables,
+        reservations: nextReservations,
+        selectedAreaId: nextAreas[0]?.id ?? null,
+        loading: false,
+      });
+    } catch {
+      set({
+        areas: mockAreas,
+        tables: mockTables,
+        reservations: mockReservations,
+        selectedAreaId: mockAreas[0]?.id ?? null,
+        loading: false,
+      });
+    }
   },
 
   selectArea: (areaId) => set({ selectedAreaId: areaId }),
 
   refreshReservations: async () => {
-    const reservations = await api.getReservations(new Date().toISOString().split('T')[0]);
+    const reservations = await api.getReservations(getLocalDateISO());
     set({ reservations });
   },
 
@@ -98,7 +128,7 @@ export const useRestaurantStore = create<RestaurantState>((set, get) => ({
   },
 
   markWalkIn: async (tableId) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateISO();
     const now = new Date();
     const startTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     await api.createReservation({
@@ -117,7 +147,7 @@ export const useRestaurantStore = create<RestaurantState>((set, get) => ({
 
   releaseTable: async (tableId) => {
     const { reservations } = get();
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateISO();
     const active = reservations.find(
       (r) =>
         r.tableIds.includes(tableId) &&
@@ -130,5 +160,19 @@ export const useRestaurantStore = create<RestaurantState>((set, get) => ({
       await api.updateReservationStatus(active.id, 'completed');
       await get().refreshReservations();
     }
+  },
+
+  updateTablePosition: (tableId, x, y) => {
+    set((state) => ({
+      tables: state.tables.map((table) =>
+        table.id === tableId
+          ? {
+              ...table,
+              x,
+              y,
+            }
+          : table
+      ),
+    }));
   },
 }));
