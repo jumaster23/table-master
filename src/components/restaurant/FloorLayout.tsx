@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useRestaurantStore } from '@/store/restaurant-store';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRestaurantStore, computeTablesWithStatus } from '@/store/restaurant-store';
 import { AreaSidebar } from './AreaSidebar';
 import { AreaCanvas } from './AreaCanvas';
 import { TableActionModal } from './TableActionModal';
@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, CalendarDays, Unlock } from 'lucide-react';
 
 export function FloorLayout() {
-  const { loadInitialData, refreshReservations, releaseTable } = useRestaurantStore();
+  const loadInitialData = useRestaurantStore((s) => s.loadInitialData);
+  const refreshReservations = useRestaurantStore((s) => s.refreshReservations);
+  const releaseTable = useRestaurantStore((s) => s.releaseTable);
+  const markWalkIn = useRestaurantStore((s) => s.markWalkIn);
 
   const [selectedTable, setSelectedTable] = useState<TableWithStatus | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
@@ -22,13 +25,11 @@ export function FloorLayout() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-refresh reservations every 30s
   useEffect(() => {
     const interval = setInterval(refreshReservations, 30000);
     return () => clearInterval(interval);
@@ -36,23 +37,15 @@ export function FloorLayout() {
 
   const handleTableClick = useCallback((table: TableWithStatus) => {
     setSelectedTable(table);
-
     if (table.visualStatus === 'available') {
       setShowActionModal(true);
-    } else if (table.visualStatus === 'occupied') {
-      // For occupied tables, offer to release
-      setShowActionModal(false);
-      setShowReservationModal(false);
     }
-    // For reserved tables, just show info via selection
   }, []);
 
   const handleReserve = () => {
     setShowActionModal(false);
     setShowReservationModal(true);
   };
-
-  const { markWalkIn } = useRestaurantStore();
 
   const handleWalkIn = async () => {
     if (!selectedTable) return;
@@ -80,14 +73,12 @@ export function FloorLayout() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Header */}
       <header className="h-14 bg-card border-b border-border flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-sm font-bold text-foreground tracking-tight">FLOOR MANAGER</h1>
           <div className="h-5 w-px bg-border" />
           <span className="text-xs text-muted-foreground capitalize">{dateStr}</span>
         </div>
-
         <div className="flex items-center gap-3">
           <span className="font-mono text-sm text-primary font-bold">{timeStr}</span>
           <div className="h-5 w-px bg-border" />
@@ -111,36 +102,26 @@ export function FloorLayout() {
         </div>
       </header>
 
-      {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         <AreaSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <AreaCanvas onTableClick={handleTableClick} />
-
-          {/* Quick release bar for occupied tables */}
           <OccupiedTableBar onRelease={handleRelease} />
         </div>
       </div>
 
-      {/* Modals */}
       {selectedTable && (
         <>
           <TableActionModal
             open={showActionModal}
-            onClose={() => {
-              setShowActionModal(false);
-              setSelectedTable(null);
-            }}
+            onClose={() => { setShowActionModal(false); setSelectedTable(null); }}
             table={selectedTable}
             onReserve={handleReserve}
             onWalkIn={handleWalkIn}
           />
           <ReservationModal
             open={showReservationModal}
-            onClose={() => {
-              setShowReservationModal(false);
-              setSelectedTable(null);
-            }}
+            onClose={() => { setShowReservationModal(false); setSelectedTable(null); }}
             table={selectedTable}
           />
         </>
@@ -155,8 +136,13 @@ export function FloorLayout() {
 }
 
 function OccupiedTableBar({ onRelease }: { onRelease: (tableId: string) => void }) {
-  const tables = useRestaurantStore((s) => s.getTablesWithStatus());
-  const occupied = tables.filter((t) => t.visualStatus === 'occupied');
+  const rawTables = useRestaurantStore((s) => s.tables);
+  const reservations = useRestaurantStore((s) => s.reservations);
+
+  const occupied = useMemo(() => {
+    const all = computeTablesWithStatus(rawTables, reservations, new Date());
+    return all.filter((t) => t.visualStatus === 'occupied');
+  }, [rawTables, reservations]);
 
   if (occupied.length === 0) return null;
 

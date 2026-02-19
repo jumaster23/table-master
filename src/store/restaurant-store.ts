@@ -17,13 +17,9 @@ interface RestaurantState {
   updateReservationStatus: (id: string, status: Reservation['status']) => Promise<void>;
   markWalkIn: (tableId: string) => Promise<void>;
   releaseTable: (tableId: string) => Promise<void>;
-
-  // Computed
-  getTablesWithStatus: () => TableWithStatus[];
-  getAreaTables: (areaId: string) => TableWithStatus[];
 }
 
-function computeVisualStatus(
+export function computeVisualStatus(
   table: RestaurantTable,
   reservations: Reservation[],
   now: Date
@@ -38,27 +34,32 @@ function computeVisualStatus(
   });
 
   for (const res of activeReservations) {
-    // Walk-in (duration 0) = occupied normal
     if (res.duration === 0) {
       return { status: 'occupied', reservation: res };
     }
-
-    // Active reservation (current time is within range)
     if (res.startTime <= currentTime && res.endTime > currentTime) {
-      // Check if VIP combined
       if (table.isVIP && res.tableIds.length > 1) {
         return { status: 'vip_combined', reservation: res };
       }
       return { status: 'reserved_active', reservation: res };
     }
-
-    // Future reservation
     if (res.startTime > currentTime) {
       return { status: 'reserved_future', reservation: res };
     }
   }
 
   return { status: 'available' };
+}
+
+export function computeTablesWithStatus(
+  tables: RestaurantTable[],
+  reservations: Reservation[],
+  now: Date
+): TableWithStatus[] {
+  return tables.map((table) => {
+    const { status, reservation } = computeVisualStatus(table, reservations, now);
+    return { ...table, visualStatus: status, reservation };
+  });
 }
 
 export const useRestaurantStore = create<RestaurantState>((set, get) => ({
@@ -129,18 +130,5 @@ export const useRestaurantStore = create<RestaurantState>((set, get) => ({
       await api.updateReservationStatus(active.id, 'completed');
       await get().refreshReservations();
     }
-  },
-
-  getTablesWithStatus: () => {
-    const { tables, reservations } = get();
-    const now = new Date();
-    return tables.map((table) => {
-      const { status, reservation } = computeVisualStatus(table, reservations, now);
-      return { ...table, visualStatus: status, reservation };
-    });
-  },
-
-  getAreaTables: (areaId) => {
-    return get().getTablesWithStatus().filter((t) => t.areaId === areaId);
   },
 }));
