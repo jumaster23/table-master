@@ -1,7 +1,38 @@
-# Instrucciones para crear tablas en Supabase
+# Instrucciones de conexión con Supabase
 
 1. Ve a tu proyecto en https://app.supabase.com/
-2. Abre el panel SQL y ejecuta:
+2. En SQL Editor ejecuta primero el script de seed para datos base de la app:
+
+```sql
+-- copia y ejecuta el contenido de SUPABASE_SEED_AREAS_TABLES.sql
+```
+
+3. Si también necesitas el ajuste de schema de reservas, ejecuta:
+
+```sql
+-- copia y ejecuta el contenido de SUPABASE_MIGRATION_RESERVATIONS.sql
+```
+
+4. Configura variables de entorno del frontend en `.env` (raíz del proyecto):
+
+```dotenv
+VITE_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<tu-anon-key>
+```
+
+5. Configura variables de entorno del backend en `api/.env`:
+
+```dotenv
+SUPABASE_URL=https://<tu-proyecto>.supabase.co
+SUPABASE_SERVICE_KEY=<tu-service-role-o-sb-secret-key>
+PORT=3000
+```
+
+6. Reinicia el entorno (`npm run dev:full`).
+
+## Referencia (opcional)
+
+Este bloque era una referencia mínima para otra parte del proyecto:
 
 ```sql
 CREATE TABLE restaurants (
@@ -18,12 +49,3 @@ CREATE TABLE menus (
   price DECIMAL(10,2) NOT NULL
 );
 ```
-
-3. Copia tu URL y Key de Supabase y agrégalas al archivo `.env`:
-
-```
-VITE_SUPABASE_URL=https://<tu-proyecto>.supabase.co
-VITE_SUPABASE_ANON_KEY=<tu-anon-key>
-```
-
-4. Reinicia el servidor de desarrollo para que los cambios surtan efecto.
