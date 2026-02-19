@@ -1,4 +1,4 @@
-export type AreaName = 'Terraza' | 'Patio' | 'Lobby' | 'Bar' | 'VIP';
+export type AreaName = 'Terraza' | 'Patio' | 'Lobby' | 'Bar' | 'Salones VIP';
 
 export interface Area {
   id: string;

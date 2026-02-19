@@ -13,10 +13,21 @@ export function CountdownTimer({ startTime, duration, date }: CountdownTimerProp
   useEffect(() => {
     const update = () => {
       const [h, m] = startTime.split(':').map(Number);
-      const start = new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
-      const end = new Date(start.getTime() + duration * 60 * 1000);
+      const startDate = new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+      const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
       const now = new Date();
-      const diff = end.getTime() - now.getTime();
+
+      // If reservation hasn't started yet, show time until start
+      if (now < startDate) {
+        const diff = startDate.getTime() - now.getTime();
+        const min = Math.floor(diff / 60000);
+        const sec = Math.floor((diff % 60000) / 1000);
+        setRemaining(`⏳ ${min}:${String(sec).padStart(2, '0')}`);
+        setExceeded(false);
+        return;
+      }
+
+      const diff = endDate.getTime() - now.getTime();
 
       if (diff <= 0) {
         const over = Math.abs(diff);

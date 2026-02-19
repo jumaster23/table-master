@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import { useRestaurantStore, computeTablesWithStatus } from '@/store/restaurant-store';
 import { AreaSidebar } from './AreaSidebar';
 import { AreaCanvas } from './AreaCanvas';
@@ -40,6 +41,7 @@ export function FloorLayout() {
     if (table.visualStatus === 'available') {
       setShowActionModal(true);
     }
+    // For occupied/reserved tables, clicking them could show release option
   }, []);
 
   const handleReserve = () => {
@@ -139,29 +141,39 @@ function OccupiedTableBar({ onRelease }: { onRelease: (tableId: string) => void 
   const rawTables = useRestaurantStore((s) => s.tables);
   const reservations = useRestaurantStore((s) => s.reservations);
 
-  const occupied = useMemo(() => {
+  const releasable = useMemo(() => {
     const all = computeTablesWithStatus(rawTables, reservations, new Date());
-    return all.filter((t) => t.visualStatus === 'occupied');
+    return all.filter((t) =>
+      t.visualStatus === 'occupied' ||
+      t.visualStatus === 'reserved_active' ||
+      t.visualStatus === 'vip_combined'
+    );
   }, [rawTables, reservations]);
 
-  if (occupied.length === 0) return null;
+  if (releasable.length === 0) return null;
 
   return (
     <div className="border-t border-border bg-card px-4 py-2 shrink-0">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-        Mesas ocupadas sin reserva
+        Mesas activas — Click para liberar
       </div>
       <div className="flex gap-2 flex-wrap">
-        {occupied.map((t) => (
+        {releasable.map((t) => (
           <Button
             key={t.id}
             variant="ghost"
             size="sm"
             onClick={() => onRelease(t.id)}
-            className="h-7 px-2 text-xs gap-1 bg-secondary hover:bg-accent text-foreground"
+            className={cn(
+              "h-7 px-2 text-xs gap-1 text-foreground",
+              t.visualStatus === 'occupied' ? 'bg-secondary hover:bg-accent' : 'bg-destructive/20 hover:bg-destructive/30'
+            )}
           >
             <Unlock className="w-3 h-3" />
             {t.name}
+            {t.reservation?.clientName && t.reservation.clientName !== 'Walk-in' && (
+              <span className="opacity-60 ml-1">({t.reservation.clientName})</span>
+            )}
           </Button>
         ))}
       </div>

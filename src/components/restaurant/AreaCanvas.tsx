@@ -22,7 +22,7 @@ export function AreaCanvas({ onTableClick }: AreaCanvasProps) {
   }, [selectedAreaId, rawTables, reservations]);
 
   const vipMergedReservation = useMemo(() => {
-    if (area?.name !== 'VIP') return null;
+    if (area?.name !== 'Salones VIP') return null;
     const tableA = tables.find((t) => t.mergeGroup === 'VIP_AB' && t.name === 'Cuadrada A');
     const tableB = tables.find((t) => t.mergeGroup === 'VIP_AB' && t.name === 'Cuadrada B');
     if (!tableA || !tableB) return null;
@@ -109,7 +109,7 @@ export function AreaCanvas({ onTableClick }: AreaCanvasProps) {
         </span>
       </div>
       <div className="min-h-[400px] flex items-start justify-center">
-        {area.name === 'VIP' ? renderVIPLayout() : renderStandardLayout()}
+        {area.name === 'Salones VIP' ? renderVIPLayout() : renderStandardLayout()}
       </div>
     </div>
   );
